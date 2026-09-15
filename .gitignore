@@ -40,3 +40,4 @@ DOCUMENTOS/
 Thumbs.db
 *~
 *.swp
+*.egg-info/
