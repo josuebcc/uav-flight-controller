@@ -1,15 +1,55 @@
 [project]
 name = "uav-sim"
 version = "0.1.0"
-requires-python = ">=3.10"
-dependencies = ["numpy", "scipy", "matplotlib", "pyyaml"]
+description = "Gemelo digital de un cuadricóptero para desarrollar y validar su controlador de vuelo"
+readme = "README.md"
+license = "MIT"
+authors = [{ name = "Josué Bohórquez Cristóbal" }]
+requires-python = ">=3.12"
+dependencies = [
+    "numpy>=2.0",
+    "scipy>=1.13",
+    "matplotlib>=3.8",
+    "pyyaml>=6.0",
+    "control>=0.10",
+]
 
 [project.optional-dependencies]
-dev = ["pytest", "jupyter", "control"]
+dev = [
+    "pytest>=8",
+    "ruff>=0.6",
+    "mypy>=1.10",
+    "types-PyYAML",
+    "jupyter",
+]
 
 [build-system]
-requires = ["setuptools>=61"]
+requires = ["setuptools>=77"]
 build-backend = "setuptools.build_meta"
 
 [tool.setuptools.packages.find]
-include = ["sim*"]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-ra --strict-markers --strict-config"
+xfail_strict = true
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.ruff.lint]
+# E/W: pycodestyle, F: pyflakes, I: orden de imports, B: bugbear, UP: sintaxis moderna, NPY: numpy
+select = ["E", "W", "F", "I", "B", "UP", "NPY"]
+
+[tool.mypy]
+python_version = "3.12"
+files = ["src", "tests", "experiments"]
+check_untyped_defs = true
+warn_unused_ignores = true
+warn_redundant_casts = true
+
+[[tool.mypy.overrides]]
+module = ["scipy.*", "control.*", "matplotlib.*"]
+ignore_missing_imports = true

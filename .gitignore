@@ -12,6 +12,13 @@ __pycache__/
 *.py[cod]
 .venv/
 venv/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.ipynb_checkpoints/
+
+# Resultados generados por los experimentos (se regeneran, no se versionan)
+experiments/out/
 
 # LaTeX
 *.aux
