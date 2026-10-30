@@ -1,0 +1,453 @@
+<!doctype html><html><head><meta charset=utf8><meta name=viewport content="width=device-width,initial-scale=1,viewport-fit=cover"><style>:root{color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}html{scroll-padding-top:env(safe-area-inset-top,0px)}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#fff;color:#000}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}</style></head><body>
+<title>Conducción con el modelo de la bicicleta</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@600;700&family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:ital,wght@0,400;0,600;1,400&display=swap">
+<style>
+  /* Layout: la pista ocupa la columna principal; a la derecha, mandos y las variables del modelo en vivo.
+     Mismo código de color que el resto de apuntes: azul = posición y velocidad, naranja = entradas,
+     violeta = ángulos y centro de giro. */
+  :root {
+    --bg: #f5f7fa;
+    --surface: #ffffff;
+    --ink: #18212c;
+    --muted: #5a6574;
+    --line: #d9dfe7;
+    --line-strong: #bcc5d1;
+    --geo: #1f62b0;
+    --force: #c2410c;
+    --torque: #7a3fd6;
+    --wash: #eaf0f7;
+    --display: "Archivo", "Helvetica Neue", Arial, sans-serif;
+    --body: "IBM Plex Sans", "Segoe UI", Roboto, sans-serif;
+    --mono: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #10151c; --surface: #171f29; --ink: #e5eaf0; --muted: #98a4b3; --line: #232c38; --line-strong: #344052;
+      --geo: #6ea8ee; --force: #f08b5e; --torque: #b79cf6; --wash: #1f2b39;
+      color-scheme: dark;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #10151c; --surface: #171f29; --ink: #e5eaf0; --muted: #98a4b3; --line: #232c38; --line-strong: #344052;
+    --geo: #6ea8ee; --force: #f08b5e; --torque: #b79cf6; --wash: #1f2b39;
+    color-scheme: dark;
+  }
+
+  body { background: var(--bg); color: var(--ink); font-family: var(--body); font-size: 16px; line-height: 1.55; }
+  .page {
+    max-width: 1180px; margin: 0 auto;
+    padding-left: max(16px, env(safe-area-inset-left, 0px));
+    padding-right: max(16px, env(safe-area-inset-right, 0px));
+    padding-block: 28px 56px;
+    display: grid; gap: 20px;
+  }
+  header { display: grid; gap: 6px; max-width: 75ch; }
+  .eyebrow { font-family: var(--mono); font-size: 12.5px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); }
+  h1 { font-family: var(--display); font-weight: 700; font-size: clamp(26px, 4.6vw, 38px); line-height: 1.1; margin: 0; text-wrap: balance; }
+  h2 { font-family: var(--display); font-weight: 700; font-size: 16px; margin: 0; }
+  p { margin: 0; }
+  .lede { color: var(--muted); font-size: 16.5px; }
+
+  .lab { display: grid; grid-template-columns: minmax(0, 1.7fr) minmax(0, 1fr); gap: 18px; align-items: start; }
+  @media (max-width: 900px) { .lab { grid-template-columns: minmax(0, 1fr); } }
+  .panel { background: var(--surface); border: 1px solid var(--line-strong); border-radius: 6px; padding: 14px; display: grid; gap: 12px; min-width: 0; }
+
+  #track { width: 100%; height: 480px; display: block; border-radius: 4px; background: var(--bg); touch-action: none; outline: none; }
+  #track:focus-visible { box-shadow: 0 0 0 2px var(--geo); }
+  @media (max-width: 600px) { #track { height: 340px; } }
+
+  .row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+  button {
+    font: 500 14px var(--body); color: var(--ink); background: var(--bg);
+    border: 1px solid var(--line-strong); border-radius: 5px; padding: 7px 12px; cursor: pointer;
+    user-select: none; -webkit-user-select: none;
+  }
+  button:hover { border-color: var(--muted); }
+  button:focus-visible, input:focus-visible { outline: 2px solid var(--geo); outline-offset: 2px; }
+  button.primary { background: var(--ink); color: var(--bg); border-color: var(--ink); }
+  button[aria-pressed="true"] { background: var(--wash); border-color: var(--geo); color: var(--geo); }
+
+  .pad { display: grid; grid-template-columns: repeat(3, 56px); grid-template-rows: repeat(2, 44px); gap: 6px; }
+  .pad button { padding: 0; font-size: 18px; line-height: 1; }
+  .pad .up { grid-column: 2; grid-row: 1; }
+  .pad .left { grid-column: 1; grid-row: 2; }
+  .pad .down { grid-column: 2; grid-row: 2; }
+  .pad .right { grid-column: 3; grid-row: 2; }
+  .pad button.held { background: var(--force); color: var(--surface); border-color: var(--force); }
+  .keys { font-size: 13.5px; color: var(--muted); }
+  kbd { font-family: var(--mono); font-size: 12px; border: 1px solid var(--line-strong); border-bottom-width: 2px; border-radius: 4px; padding: 0 5px; background: var(--bg); color: var(--ink); }
+
+  .knob { display: grid; grid-template-columns: 6.6em minmax(0, 1fr) 5.2em; gap: 10px; align-items: center; font-size: 14px; }
+  .knob label small { display: block; color: var(--muted); font-size: 12px; line-height: 1.3; }
+  .knob input[type="range"] { width: 100%; accent-color: var(--force); }
+  .knob.param input[type="range"] { accent-color: var(--muted); }
+  .knob output { font-family: var(--mono); font-size: 13.5px; text-align: right; font-variant-numeric: tabular-nums; }
+
+  .vars { display: grid; gap: 4px; }
+  .group { font-family: var(--mono); font-size: 11.5px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); margin-top: 6px; }
+  .var { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 10px; align-items: baseline; border-top: 1px solid var(--line); padding-top: 5px; font-size: 14px; }
+  .var .f { font-family: var(--mono); font-size: 13px; color: var(--muted); overflow-wrap: anywhere; }
+  .var .f b { color: var(--ink); font-weight: 500; }
+  .var .v { font-family: var(--mono); font-size: 14px; font-variant-numeric: tabular-nums; text-align: right; white-space: nowrap; }
+  .c-in { color: var(--force); }
+  .c-st { color: var(--geo); }
+  .c-ang { color: var(--torque); }
+
+  .notes { display: grid; gap: 8px; max-width: 80ch; font-size: 15px; }
+  .notes ul { margin: 0; padding-left: 1.2em; display: grid; gap: 4px; }
+  .eqline { font-family: var(--mono); font-size: 14px; background: var(--surface); border: 1px solid var(--line-strong); border-radius: 5px; padding: 8px 12px; overflow-x: auto; white-space: pre; }
+  .status { font-size: 13.5px; color: var(--muted); }
+</style>
+
+<main class="page">
+  <header>
+    <div class="eyebrow">Ejemplo 2.8 · Åström &amp; Murray · Modelo cinemático</div>
+    <h1>Conducción con el modelo de la bicicleta</h1>
+    <p class="lede">Conduce con el acelerador (v₀) y el volante (δ). La posición sale de integrar las ecuaciones (2.23)–(2.25) con el método de Euler, y a la derecha ves cada variable en vivo.</p>
+  </header>
+
+  <div class="lab">
+    <div class="panel">
+      <canvas id="track" tabindex="0" aria-label="Pista vista desde arriba con el coche, su trayectoria y el centro de giro"></canvas>
+      <div class="row" style="justify-content: space-between">
+        <div class="row">
+          <button id="b-run" class="primary" type="button">Arrancar</button>
+          <button id="b-reset" type="button">Reiniciar</button>
+          <button id="b-trail" type="button">Borrar rastro</button>
+        </div>
+        <div class="row">
+          <button id="b-o" type="button" aria-pressed="true">Centro de giro O</button>
+          <button id="b-cam" type="button" aria-pressed="true">Cámara sigue al coche</button>
+          <button id="b-zin" type="button" aria-label="Acercar">+</button>
+          <button id="b-zout" type="button" aria-label="Alejar">−</button>
+        </div>
+      </div>
+      <div class="row" style="gap: 16px">
+        <div class="pad" aria-label="Mandos táctiles">
+          <button class="up" type="button" data-k="up" aria-label="Acelerar">▲</button>
+          <button class="left" type="button" data-k="left" aria-label="Girar a la izquierda">◀</button>
+          <button class="down" type="button" data-k="down" aria-label="Frenar o marcha atrás">▼</button>
+          <button class="right" type="button" data-k="right" aria-label="Girar a la derecha">▶</button>
+        </div>
+        <p class="keys">Teclado (con la pista seleccionada): <kbd>↑</kbd><kbd>↓</kbd> acelerar y frenar (por debajo de 0 va marcha atrás), <kbd>←</kbd><kbd>→</kbd> girar el volante, <kbd>C</kbd> volante recto, <kbd>Espacio</kbd> parar.</p>
+      </div>
+      <p class="status" id="status">Parado. El coche está preparado con v₀ = 5 m/s y el volante a 15°: la circunferencia muestra el giro que hará. Pulsa Arrancar.</p>
+    </div>
+
+    <div class="panel">
+      <h2>Entradas</h2>
+      <div class="knob">
+        <label for="s-v0" class="c-in">v₀<small>velocidad rueda trasera</small></label>
+        <input id="s-v0" type="range" min="-5" max="15" step="0.1" value="5">
+        <output id="o-v0" for="s-v0">5,0 m/s</output>
+      </div>
+      <div class="knob">
+        <label for="s-d" class="c-in">δ<small>ángulo del volante</small></label>
+        <input id="s-d" type="range" min="-35" max="35" step="0.5" value="15">
+        <output id="o-d" for="s-d">15,0°</output>
+      </div>
+
+      <h2>Parámetros del vehículo</h2>
+      <div class="knob param">
+        <label for="s-b">b<small>distancia entre ejes</small></label>
+        <input id="s-b" type="range" min="1.5" max="4" step="0.1" value="2.7">
+        <output id="o-b" for="s-b">2,7 m</output>
+      </div>
+      <div class="knob param">
+        <label for="s-a">a<small>eje trasero → centro de masas</small></label>
+        <input id="s-a" type="range" min="0" max="2.7" step="0.1" value="1.2">
+        <output id="o-a" for="s-a">1,2 m</output>
+      </div>
+
+      <h2>Variables del modelo</h2>
+      <div class="vars">
+        <div class="group">Estado</div>
+        <div class="var"><span class="f c-st"><b class="c-st">x</b> posición del centro de masas</span><span class="v" id="v-x">0,00 m</span></div>
+        <div class="var"><span class="f c-st"><b class="c-st">y</b> posición del centro de masas</span><span class="v" id="v-y">0,00 m</span></div>
+        <div class="var"><span class="f c-ang"><b class="c-ang">θ</b> orientación</span><span class="v" id="v-th">0,0°</span></div>
+
+        <div class="group">Intermedias</div>
+        <div class="var"><span class="f"><b class="c-ang">α</b> = arctan((a/b)·tan δ)</span><span class="v" id="v-al">–</span></div>
+        <div class="var"><span class="f"><b class="c-st">v</b> = v₀ / cos α</span><span class="v" id="v-v">–</span></div>
+        <div class="var"><span class="f"><b>r<sub>a</sub></b> = b / tan δ  (radio de giro)</span><span class="v" id="v-ra">–</span></div>
+
+        <div class="group">Derivadas (ẋ = f(x, u))</div>
+        <div class="var"><span class="f"><b>ẋ</b> = v·cos(α + θ)</span><span class="v" id="v-xd">–</span></div>
+        <div class="var"><span class="f"><b>ẏ</b> = v·sin(α + θ)</span><span class="v" id="v-yd">–</span></div>
+        <div class="var"><span class="f"><b>θ̇</b> = (v₀ / b)·tan δ</span><span class="v" id="v-thd">–</span></div>
+
+        <div class="group">Recorrido</div>
+        <div class="var"><span class="f"><b>t</b> tiempo simulado</span><span class="v" id="v-t">0,0 s</span></div>
+        <div class="var"><span class="f"><b>s</b> distancia recorrida</span><span class="v" id="v-s">0,0 m</span></div>
+      </div>
+    </div>
+  </div>
+
+  <section class="notes" aria-labelledby="n-h">
+    <h2 id="n-h">Cómo se calcula cada paso</h2>
+    <p>Cada fotograma se divide en pasos de h = 5 ms. En cada paso se calculan α, v y las tres derivadas con las entradas del momento, y se avanza el estado con Euler:</p>
+    <div class="eqline">x[k+1] = x[k] + h·ẋ[k]
+y[k+1] = y[k] + h·ẏ[k]
+θ[k+1] = θ[k] + h·θ̇[k]</div>
+    <ul>
+      <li>La flecha azul es la velocidad del centro de masas: forma un ángulo α con el eje del coche.</li>
+      <li>O es el centro instantáneo de rotación: está en la prolongación del eje trasero, a r<sub>a</sub> = b/tan δ de la rueda trasera. Las líneas violetas van de O a cada rueda y al centro de masas.</li>
+      <li>Prueba a mover <b>a</b>: con a = 0 el punto de referencia es la rueda trasera, α = 0 y tienes el coche de Dubins. Con v₀ negativa va marcha atrás.</li>
+      <li>Es un modelo cinemático: no hay masas ni fuerzas, así que el coche gira y frena al instante, sin derrapar.</li>
+    </ul>
+  </section>
+</main>
+
+<script>
+(function () {
+  const $ = (id) => document.getElementById(id);
+  const cv = $('track');
+  const sV0 = $('s-v0'), sD = $('s-d'), sA = $('s-a'), sB = $('s-b');
+  const H = 0.005, DMAX = 35, VMIN = -5, VMAX = 15;
+  const RAD = Math.PI / 180;
+
+  let st, t, dist, trail, running = false, showO = true, follow = true, zoom = 24, cam = { x: 0, y: 0 };
+  const held = { up: false, down: false, left: false, right: false };
+  let last = null;
+
+  const fmt = (v, d) => {
+    if (!isFinite(v)) return '∞';
+    const r = Math.abs(v) < 0.5 * Math.pow(10, -d) ? 0 : v;
+    return r.toFixed(d).replace('.', ',').replace('-', '−');
+  };
+  const css = (n) => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+  const wrapDeg = (r) => { let d = r / RAD % 360; if (d > 180) d -= 360; if (d < -180) d += 360; return d; };
+
+  function inputs() {
+    return { v0: +sV0.value, d: +sD.value * RAD, a: Math.min(+sA.value, +sB.value), b: +sB.value };
+  }
+
+  function model(s, u) {
+    const alpha = Math.atan((u.a / u.b) * Math.tan(u.d));
+    const v = u.v0 / Math.cos(alpha);
+    return {
+      alpha, v,
+      xd: v * Math.cos(alpha + s.th),
+      yd: v * Math.sin(alpha + s.th),
+      thd: (u.v0 / u.b) * Math.tan(u.d)
+    };
+  }
+
+  function reset() {
+    st = { x: 0, y: 0, th: 0 }; t = 0; dist = 0; trail = [[0, 0]];
+    cam = { x: 0, y: 0 };
+    draw();
+  }
+
+  function stepAll(dt) {
+    // mandos mantenidos
+    if (held.up) sV0.value = Math.min(VMAX, +sV0.value + 4 * dt).toFixed(1);
+    if (held.down) sV0.value = Math.max(VMIN, +sV0.value - 4 * dt).toFixed(1);
+    if (held.left) sD.value = Math.min(DMAX, +sD.value + 45 * dt).toFixed(1);
+    if (held.right) sD.value = Math.max(-DMAX, +sD.value - 45 * dt).toFixed(1);
+    const u = inputs();
+    const n = Math.max(1, Math.round(dt / H));
+    for (let i = 0; i < n; i++) {
+      const m = model(st, u);
+      st.x += H * m.xd; st.y += H * m.yd; st.th += H * m.thd;
+      dist += H * Math.abs(m.v); t += H;
+    }
+    const lp = trail[trail.length - 1];
+    if (Math.hypot(st.x - lp[0], st.y - lp[1]) > 0.15) { trail.push([st.x, st.y]); if (trail.length > 6000) trail.shift(); }
+  }
+
+  function loop(ts) {
+    if (!running) { last = null; return; }
+    if (last === null) last = ts;
+    const dt = Math.min(0.05, (ts - last) / 1000); last = ts;
+    stepAll(dt);
+    draw();
+    requestAnimationFrame(loop);
+  }
+
+  function start() {
+    if (running) return;
+    running = true; $('b-run').textContent = 'Pausa';
+    $('status').textContent = 'En marcha. Integrando con Euler, h = 5 ms.';
+    requestAnimationFrame(loop);
+  }
+  function pause() {
+    running = false; $('b-run').textContent = 'Arrancar';
+    $('status').textContent = 'En pausa.';
+  }
+
+  function fit() {
+    const r = cv.getBoundingClientRect(), d = window.devicePixelRatio || 1;
+    const w = Math.max(1, Math.round(r.width * d)), h = Math.max(1, Math.round(r.height * d));
+    if (cv.width !== w || cv.height !== h) { cv.width = w; cv.height = h; }
+    const g = cv.getContext('2d'); g.setTransform(d, 0, 0, d, 0, 0);
+    return { g, w: r.width, h: r.height };
+  }
+
+  function draw() {
+    const { g, w, h } = fit();
+    const C = { ink: css('--ink'), muted: css('--muted'), line: css('--line'), strong: css('--line-strong'), geo: css('--geo'),
+      force: css('--force'), torque: css('--torque'), wash: css('--wash'), surface: css('--surface'), mono: css('--mono') };
+    if (follow) { cam.x = st.x; cam.y = st.y; }
+    const s = zoom, cx = w / 2, cy = h / 2;
+    const SX = (X) => cx + (X - cam.x) * s, SY = (Y) => cy - (Y - cam.y) * s;
+    g.clearRect(0, 0, w, h);
+
+    // rejilla
+    const x0 = cam.x - cx / s, x1 = cam.x + cx / s, y0 = cam.y - cy / s, y1 = cam.y + cy / s;
+    const minor = s >= 10 ? 1 : 5;
+    g.lineWidth = 1;
+    for (let X = Math.floor(x0 / minor) * minor; X <= x1; X += minor) {
+      g.strokeStyle = (Math.round(X) % 10 === 0) ? C.strong : C.line;
+      g.beginPath(); g.moveTo(SX(X), 0); g.lineTo(SX(X), h); g.stroke();
+    }
+    for (let Y = Math.floor(y0 / minor) * minor; Y <= y1; Y += minor) {
+      g.strokeStyle = (Math.round(Y) % 10 === 0) ? C.strong : C.line;
+      g.beginPath(); g.moveTo(0, SY(Y)); g.lineTo(w, SY(Y)); g.stroke();
+    }
+    // ejes
+    g.strokeStyle = C.muted; g.lineWidth = 1.5;
+    g.beginPath(); g.moveTo(0, SY(0)); g.lineTo(w, SY(0)); g.moveTo(SX(0), 0); g.lineTo(SX(0), h); g.stroke();
+    g.font = '11px ' + C.mono; g.fillStyle = C.muted;
+    g.textAlign = 'center';
+    for (let X = Math.ceil(x0 / 10) * 10; X <= x1; X += 10) if (X !== 0) g.fillText(X + ' m', SX(X), Math.min(h - 6, Math.max(14, SY(0) + 14)));
+    g.textAlign = 'left';
+    for (let Y = Math.ceil(y0 / 10) * 10; Y <= y1; Y += 10) if (Y !== 0) g.fillText(Y + ' m', Math.min(w - 40, Math.max(4, SX(0) + 5)), SY(Y) - 4);
+    g.fillText('x', w - 14, Math.min(h - 6, Math.max(14, SY(0) - 6)));
+    g.fillText('y', Math.min(w - 12, Math.max(4, SX(0) + 6)), 14);
+
+    // rastro
+    if (trail.length > 1) {
+      g.strokeStyle = C.geo; g.globalAlpha = 0.55; g.lineWidth = 2;
+      g.beginPath(); trail.forEach(([X, Y], i) => i ? g.lineTo(SX(X), SY(Y)) : g.moveTo(SX(X), SY(Y)));
+      g.lineTo(SX(st.x), SY(st.y)); g.stroke(); g.globalAlpha = 1;
+    }
+
+    const u = inputs(), m = model(st, u);
+    const c = Math.cos(st.th), sn = Math.sin(st.th);
+    const rear = { x: st.x - u.a * c, y: st.y - u.a * sn };
+    const front = { x: rear.x + u.b * c, y: rear.y + u.b * sn };
+
+    // centro de giro O
+    if (showO && Math.abs(u.d) > 0.3 * RAD) {
+      const ra = u.b / Math.tan(u.d);
+      const O = { x: rear.x - ra * sn, y: rear.y + ra * c };
+      const R = Math.hypot(st.x - O.x, st.y - O.y);
+      g.strokeStyle = C.torque; g.lineWidth = 1.2; g.setLineDash([5, 5]);
+      g.beginPath(); g.arc(SX(O.x), SY(O.y), R * s, 0, Math.PI * 2); g.stroke();
+      g.globalAlpha = 0.85;
+      [rear, front, { x: st.x, y: st.y }].forEach(P => { g.beginPath(); g.moveTo(SX(O.x), SY(O.y)); g.lineTo(SX(P.x), SY(P.y)); g.stroke(); });
+      g.setLineDash([]); g.globalAlpha = 1;
+      g.fillStyle = C.torque; g.beginPath(); g.arc(SX(O.x), SY(O.y), 4, 0, Math.PI * 2); g.fill();
+      g.font = '12px ' + C.mono; g.textAlign = 'left'; g.fillText('O', SX(O.x) + 7, SY(O.y) - 6);
+    }
+
+    // carrocería
+    const ov = 0.8, half = 0.85;
+    const pts = [
+      [rear.x - ov * c + half * sn, rear.y - ov * sn - half * c],
+      [front.x + ov * c + half * sn, front.y + ov * sn - half * c],
+      [front.x + ov * c - half * sn, front.y + ov * sn + half * c],
+      [rear.x - ov * c - half * sn, rear.y - ov * sn + half * c]
+    ];
+    g.fillStyle = C.wash; g.strokeStyle = C.ink; g.lineWidth = 1.6; g.globalAlpha = 0.92;
+    g.beginPath(); pts.forEach(([X, Y], i) => i ? g.lineTo(SX(X), SY(Y)) : g.moveTo(SX(X), SY(Y))); g.closePath(); g.fill(); g.stroke();
+    g.globalAlpha = 1;
+    // eje longitudinal
+    g.strokeStyle = C.muted; g.lineWidth = 1;
+    g.beginPath(); g.moveTo(SX(rear.x), SY(rear.y)); g.lineTo(SX(front.x), SY(front.y)); g.stroke();
+
+    function wheel(P, ang) {
+      const L = 0.75, W = 0.28, ca = Math.cos(ang), sa = Math.sin(ang);
+      const q = [[L / 2, W / 2], [L / 2, -W / 2], [-L / 2, -W / 2], [-L / 2, W / 2]].map(([px, py]) => [P.x + px * ca - py * sa, P.y + px * sa + py * ca]);
+      g.fillStyle = C.ink; g.beginPath(); q.forEach(([X, Y], i) => i ? g.lineTo(SX(X), SY(Y)) : g.moveTo(SX(X), SY(Y))); g.closePath(); g.fill();
+    }
+    wheel(rear, st.th);
+    wheel(front, st.th + u.d);
+
+    // centro de masas
+    g.fillStyle = C.surface; g.strokeStyle = C.geo; g.lineWidth = 2;
+    g.beginPath(); g.arc(SX(st.x), SY(st.y), 5, 0, Math.PI * 2); g.fill(); g.stroke();
+
+    // velocidad del centro de masas
+    if (Math.abs(m.v) > 0.05) {
+      const L = Math.max(1.2, Math.min(6, Math.abs(m.v) * 0.45)) * Math.sign(m.v);
+      const ang = st.th + m.alpha;
+      const ex = st.x + L * Math.cos(ang), ey = st.y + L * Math.sin(ang);
+      const X0 = SX(st.x), Y0 = SY(st.y), X1 = SX(ex), Y1 = SY(ey);
+      const a2 = Math.atan2(Y1 - Y0, X1 - X0);
+      g.strokeStyle = C.geo; g.fillStyle = C.geo; g.lineWidth = 2.5;
+      g.beginPath(); g.moveTo(X0, Y0); g.lineTo(X1 - 7 * Math.cos(a2), Y1 - 7 * Math.sin(a2)); g.stroke();
+      g.beginPath(); g.moveTo(X1, Y1); g.lineTo(X1 - 11 * Math.cos(a2 - 0.42), Y1 - 11 * Math.sin(a2 - 0.42)); g.lineTo(X1 - 11 * Math.cos(a2 + 0.42), Y1 - 11 * Math.sin(a2 + 0.42)); g.closePath(); g.fill();
+      g.font = '12px ' + C.mono; g.textAlign = 'left'; g.fillText('v', X1 + 6, Y1 - 4);
+    }
+
+    // lecturas
+    $('v-x').textContent = fmt(st.x, 2) + ' m';
+    $('v-y').textContent = fmt(st.y, 2) + ' m';
+    $('v-th').textContent = fmt(wrapDeg(st.th), 1) + '°';
+    $('v-al').textContent = fmt(m.alpha / RAD, 2) + '°';
+    $('v-v').textContent = fmt(m.v, 2) + ' m/s';
+    $('v-ra').textContent = Math.abs(u.d) < 1e-6 ? '∞ (recto)' : fmt(u.b / Math.tan(u.d), 2) + ' m';
+    $('v-xd').textContent = fmt(m.xd, 2) + ' m/s';
+    $('v-yd').textContent = fmt(m.yd, 2) + ' m/s';
+    $('v-thd').textContent = fmt(m.thd / RAD, 1) + ' °/s';
+    $('v-t').textContent = fmt(t, 1) + ' s';
+    $('v-s').textContent = fmt(dist, 1) + ' m';
+    $('o-v0').textContent = fmt(+sV0.value, 1) + ' m/s';
+    $('o-d').textContent = fmt(+sD.value, 1) + '°';
+    $('o-a').textContent = fmt(+sA.value, 1) + ' m';
+    $('o-b').textContent = fmt(+sB.value, 1) + ' m';
+  }
+
+  // botones
+  $('b-run').addEventListener('click', () => running ? pause() : start());
+  $('b-reset').addEventListener('click', reset);
+  $('b-trail').addEventListener('click', () => { trail = [[st.x, st.y]]; draw(); });
+  $('b-o').addEventListener('click', (e) => { showO = !showO; e.currentTarget.setAttribute('aria-pressed', String(showO)); draw(); });
+  $('b-cam').addEventListener('click', (e) => { follow = !follow; e.currentTarget.setAttribute('aria-pressed', String(follow)); e.currentTarget.textContent = follow ? 'Cámara sigue al coche' : 'Cámara fija'; draw(); });
+  $('b-zin').addEventListener('click', () => { zoom = Math.min(60, zoom * 1.4); draw(); });
+  $('b-zout').addEventListener('click', () => { zoom = Math.max(3, zoom / 1.4); draw(); });
+  sA.addEventListener('input', () => { if (+sA.value > +sB.value) sA.value = sB.value; draw(); });
+  [sV0, sD, sB].forEach(el => el.addEventListener('input', () => { if (+sA.value > +sB.value) sA.value = sB.value; draw(); }));
+
+  // mandos táctiles (mantener pulsado)
+  document.querySelectorAll('.pad button').forEach(btn => {
+    const k = btn.dataset.k;
+    const on = (e) => { e.preventDefault(); held[k] = true; btn.classList.add('held'); start(); };
+    const off = () => { held[k] = false; btn.classList.remove('held'); };
+    btn.addEventListener('pointerdown', on);
+    ['pointerup', 'pointerleave', 'pointercancel'].forEach(ev => btn.addEventListener(ev, off));
+  });
+
+  // teclado
+  const keymap = { ArrowUp: 'up', ArrowDown: 'down', ArrowLeft: 'left', ArrowRight: 'right', w: 'up', s: 'down', a: 'left', d: 'right' };
+  window.addEventListener('keydown', (e) => {
+    if (e.target && e.target.tagName === 'INPUT') return;
+    const k = keymap[e.key] || keymap[e.key.toLowerCase && e.key.toLowerCase()];
+    if (k) { e.preventDefault(); held[k] = true; start(); return; }
+    if (e.key === ' ') { e.preventDefault(); sV0.value = 0; draw(); }
+    if (e.key === 'c' || e.key === 'C') { sD.value = 0; draw(); }
+  });
+  window.addEventListener('keyup', (e) => {
+    const k = keymap[e.key] || keymap[e.key.toLowerCase && e.key.toLowerCase()];
+    if (k) held[k] = false;
+  });
+  window.addEventListener('blur', () => Object.keys(held).forEach(k => held[k] = false));
+  cv.addEventListener('pointerdown', () => cv.focus());
+
+  window.addEventListener('resize', draw);
+  if (window.matchMedia) {
+    const mq = window.matchMedia('(prefers-color-scheme: dark)');
+    mq.addEventListener && mq.addEventListener('change', draw);
+  }
+  new MutationObserver(draw).observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
+  if (document.fonts && document.fonts.ready) document.fonts.ready.then(draw);
+  reset();
+})();
+</script>
+
+</body></html>
