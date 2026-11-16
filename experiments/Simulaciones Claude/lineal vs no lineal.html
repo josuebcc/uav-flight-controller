@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Simulador de conducción — modelo de la bicicleta (Murray, Ex. 5.12)</title>
+<style>
+:root{--bg:#fafaf7;--card:#f1efe8;--text:#2c2c2a;--muted:#5f5e5a;}
+@media (prefers-color-scheme: dark){:root{--bg:#1f1f1d;--card:#2c2c2a;--text:#f1efe8;--muted:#b4b2a9;}}
+body{margin:0;background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,"Segoe UI",sans-serif;}
+main{max-width:860px;margin:0 auto;padding:24px 16px;}
+h1{font-size:22px;font-weight:500;margin:0 0 4px;}
+p.sub{color:var(--muted);font-size:14px;margin:0 0 16px;line-height:1.5;}
+.row{display:flex;flex-wrap:wrap;align-items:center;gap:10px;margin:10px 0;font-size:14px;color:var(--muted);}
+button{padding:6px 14px;font-size:14px;border-radius:8px;border:1px solid #b4b2a9;background:var(--card);color:var(--text);cursor:pointer;}
+.grid{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;font-size:13px;}
+.card{background:var(--card);border-radius:8px;padding:8px 10px;}
+.card div:first-child{color:var(--muted);}
+.card div:last-child{font-size:18px;}
+canvas{width:100%;height:340px;display:block;border-radius:12px;outline:none;cursor:pointer;}
+.eq{font-size:13px;color:var(--muted);line-height:1.6;margin-top:14px;}
+</style>
+</head>
+<body>
+<main>
+<h1>Simulador de conducción — modelo de la bicicleta</h1>
+<p class="sub">Modelo no lineal completo (Åström &amp; Murray, Example 5.12), integrado con RK4. El fantasma naranja usa el modelo linealizado (5.35) con el mismo volante. Parámetros: a = 1,2 m, b = 2,7 m, volante máx. 30°.</p>
+<canvas id="cv" tabindex="0"></canvas>
+<div class="row">
+<button id="bl">◀ Izquierda</button>
+<button id="br">Derecha ▶</button>
+<span style="margin-left:8px">Velocidad</span><input type="range" id="sp" min="5" max="30" step="1" value="12" style="flex:1;min-width:120px"><span id="spl" style="min-width:110px;color:var(--text)"></span>
+<label style="display:flex;align-items:center;gap:6px;cursor:pointer"><input type="checkbox" id="gh"> Fantasma lineal</label>
+<button id="rs">Reiniciar</button>
+</div>
+<div class="grid">
+<div class="card"><div>Volante δ</div><div id="o1"></div></div>
+<div class="card"><div>Rumbo θ</div><div id="o2"></div></div>
+<div class="card"><div>Desviación y</div><div id="o3"></div></div>
+<div class="card"><div>Distancia al fantasma</div><div id="o4"></div></div>
+</div>
+<p class="eq">Haz clic en la carretera y usa ← → para el volante y ↑ ↓ para la velocidad. Al soltar, el volante vuelve solo al centro.<br>
+No lineal: ẋ = v·cos(α+θ), ẏ = v·sin(α+θ), θ̇ = (v₀/b)·tan δ, con α = arctan(a·tan δ / b) y v = v₀ / cos α.<br>
+Linealizado (5.35): ẏ = v₀·θ + (a·v₀/b)·δ, θ̇ = (v₀/b)·δ, con avance x = v₀·t.</p>
+</main>
+<script>
+const a=1.2,b=2.7,DM=30*Math.PI/180,HW=5.25;
+const cv=document.getElementById('cv'),ctx=cv.getContext('2d');
+let s,g,delta,steer=0,trail,v0=12,last=null,frame=0;
+function reset(){s=[0,0,0];g=[0,0,0];delta=0;trail=[];}
+reset();
+function fnl(st,d){const al=Math.atan(a*Math.tan(d)/b),v=v0/Math.cos(al);return[v*Math.cos(al+st[2]),v*Math.sin(al+st[2]),v0/b*Math.tan(d)];}
+function fli(st,d){return[v0,v0*st[2]+a*v0/b*d,v0/b*d];}
+function rk4(f,st,h,d){const ad=(k,c)=>st.map((x,i)=>x+c*k[i]);const k1=f(st,d),k2=f(ad(k1,h/2),d),k3=f(ad(k2,h/2),d),k4=f(ad(k3,h),d);return st.map((x,i)=>x+h/6*(k1[i]+2*k2[i]+2*k3[i]+k4[i]));}
+function size(){const r=window.devicePixelRatio||1;cv.width=cv.clientWidth*r;cv.height=340*r;ctx.setTransform(r,0,0,r,0,0);}
+size();window.addEventListener('resize',size);
+function drawCar(st,d,S,W,H,camX,camY,ghost){
+ const th=st[2],rx=st[0]-a*Math.cos(th),ry=st[1]-a*Math.sin(th);
+ const px=W/2+(rx-camX)*S,py=H/2-(ry-camY)*S;
+ ctx.save();ctx.translate(px,py);ctx.rotate(-th);
+ if(ghost){ctx.setLineDash([5,4]);ctx.strokeStyle='#EF9F27';ctx.lineWidth=2;ctx.strokeRect(-0.8*S,-0.9*S,(b+1.7)*S,1.8*S);ctx.setLineDash([]);ctx.restore();return;}
+ ctx.fillStyle='#2C2C2A';
+ const wh=(x,y,ang)=>{ctx.save();ctx.translate(x*S,y*S);ctx.rotate(ang);ctx.fillRect(-0.35*S,-0.13*S,0.7*S,0.26*S);ctx.restore();};
+ wh(0,-0.8,0);wh(0,0.8,0);wh(b,-0.8,-d);wh(b,0.8,-d);
+ ctx.fillStyle='#D85A30';ctx.fillRect(-0.8*S,-0.75*S,(b+1.7)*S,1.5*S);
+ ctx.fillStyle='#FAECE7';ctx.fillRect((b+0.3)*S,-0.6*S,0.5*S,1.2*S);
+ ctx.fillStyle='#2C2C2A';ctx.beginPath();ctx.arc(a*S,0,0.18*S,0,7);ctx.fill();
+ ctx.restore();}
+function draw(){
+ const W=cv.clientWidth,H=340,S=W/70,camX=s[0]+12,camY=s[1];
+ const X=x=>W/2+(x-camX)*S,Y=y=>H/2-(y-camY)*S;
+ ctx.fillStyle='#3B6D11';ctx.fillRect(0,0,W,H);
+ ctx.fillStyle='#444441';ctx.fillRect(0,Y(HW),W,Y(-HW)-Y(HW));
+ ctx.fillStyle='#F1EFE8';ctx.fillRect(0,Y(HW)-1,W,2);ctx.fillRect(0,Y(-HW)-1,W,2);
+ const x0=Math.floor((camX-W/2/S)/9)*9;
+ for(let xx=x0;xx<camX+W/2/S+9;xx+=9){[1.75,-1.75].forEach(yy=>ctx.fillRect(X(xx),Y(yy)-1,3*S,2));}
+ if(trail.length>1){ctx.strokeStyle='#85B7EB';ctx.lineWidth=2;ctx.beginPath();trail.forEach((p,i)=>{i?ctx.lineTo(X(p[0]),Y(p[1])):ctx.moveTo(X(p[0]),Y(p[1]));});ctx.stroke();}
+ if(document.getElementById('gh').checked)drawCar(g,delta,S,W,H,camX,camY,true);
+ drawCar(s,delta,S,W,H,camX,camY,false);
+ if(Math.abs(s[1])>HW){ctx.fillStyle='rgba(0,0,0,0.55)';ctx.fillRect(W/2-120,12,240,32);ctx.fillStyle='#FCEBEB';ctx.font='15px sans-serif';ctx.textAlign='center';ctx.fillText('Fuera de la carretera',W/2,33);}
+}
+const dg=r=>(r*180/Math.PI).toFixed(1).replace('.',',')+'°';
+function loop(now){
+ if(last===null)last=now;const dt=Math.min(0.05,(now-last)/1000);last=now;
+ if(steer!==0){delta+=Math.sign(steer*DM-delta)*Math.min(0.8*dt,Math.abs(steer*DM-delta));}
+ else{delta-=Math.sign(delta)*Math.min(1.2*dt,Math.abs(delta));}
+ const n=4,h=dt/n;for(let i=0;i<n;i++){s=rk4(fnl,s,h,delta);g=rk4(fli,g,h,delta);}
+ if(frame%3===0){trail.push([s[0],s[1]]);if(trail.length>400)trail.shift();}
+ draw();
+ if(frame%6===0){document.getElementById('o1').textContent=dg(delta);
+  let th=((s[2]+Math.PI)%(2*Math.PI)+2*Math.PI)%(2*Math.PI)-Math.PI;document.getElementById('o2').textContent=dg(th);
+  document.getElementById('o3').textContent=s[1].toFixed(2).replace('.',',')+' m';
+  document.getElementById('o4').textContent=document.getElementById('gh').checked?Math.hypot(g[0]-s[0],g[1]-s[1]).toFixed(1).replace('.',',')+' m':'—';}
+ frame++;requestAnimationFrame(loop);}
+const setSp=v=>{v0=Math.max(5,Math.min(30,v));document.getElementById('sp').value=v0;document.getElementById('spl').textContent=v0+' m/s ('+Math.round(v0*3.6)+' km/h)';};
+setSp(12);
+document.getElementById('sp').addEventListener('input',e=>setSp(+e.target.value));
+cv.addEventListener('keydown',e=>{if(e.key==='ArrowLeft'){steer=1;e.preventDefault();}if(e.key==='ArrowRight'){steer=-1;e.preventDefault();}if(e.key==='ArrowUp'){setSp(v0+1);e.preventDefault();}if(e.key==='ArrowDown'){setSp(v0-1);e.preventDefault();}});
+cv.addEventListener('keyup',e=>{if((e.key==='ArrowLeft'&&steer===1)||(e.key==='ArrowRight'&&steer===-1))steer=0;});
+cv.addEventListener('click',()=>cv.focus());
+const hold=(id,v)=>{const el=document.getElementById(id);el.addEventListener('pointerdown',()=>steer=v);['pointerup','pointerleave','pointercancel'].forEach(ev=>el.addEventListener(ev,()=>{if(steer===v)steer=0;}));};
+hold('bl',1);hold('br',-1);
+document.getElementById('rs').addEventListener('click',()=>{reset();cv.focus();});
+document.getElementById('gh').addEventListener('change',()=>{g=[s[0],s[1],s[2]];});
+requestAnimationFrame(loop);
+</script>
+</body>
+</html>

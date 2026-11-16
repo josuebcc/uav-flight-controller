@@ -4,5 +4,6 @@
     "python.testing.unittestEnabled": false,
     "terminal.integrated.env.linux": {
         "PYTHONPATH": ""
-    }
+    },
+    "python-envs.defaultEnvManager": "ms-python.python:system"
 }

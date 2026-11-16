@@ -4,9 +4,9 @@ import pytest
 from uav_sim.integrators.one_step import euler_step, heun_step, rk4_step
 
 
-def integrar(tipo, f, x0, u, T, h):
+def integrar(solver, f, x0, u, T, h):
     """Integra la ecuación desde t=0 y devuelve el estado final."""
-    # tipo: integrador que usamos (Euler, Heun o RK4).
+    # solver: integrador que usamos (Euler, Heun o RK4).
     # f: función que devuelve las derivadas del estado.
     # x0: estado inicial.
     # u: entrada constante; en estos ejemplos no se utiliza.
@@ -18,7 +18,7 @@ def integrar(tipo, f, x0, u, T, h):
     x = x0
     for _ in range(n):
         # Calculamos el siguiente estado a partir del actual.
-        x = tipo(f, x, u, h)
+        x = solver(f, x, u, h)
 
     return x
 
@@ -43,18 +43,18 @@ def oscilador(x, u):
 
 
 # Pytest ejecuta test_orden tres veces, una por cada pareja:
-# tipo=euler_step, orden=1
-# tipo=heun_step,  orden=2
-# tipo=rk4_step,   orden=4
+# solver=euler_step, orden=1
+# solver=heun_step,  orden=2
+# solver=rk4_step,   orden=4
 @pytest.mark.parametrize(
-    ("tipo", "orden"),
+    ("solver", "orden"),
     [
         (euler_step, 1),
         (heun_step, 2),
         (rk4_step, 4),
     ],
 )
-def test_orden(tipo, orden):
+def test_orden(solver, orden):
     """Comprueba cuánto disminuye el error al reducir el paso a la mitad."""
     x0 = np.array([1.0])
 
@@ -63,8 +63,8 @@ def test_orden(tipo, orden):
 
     # Calculamos el estado final con dos tamaños de paso.
     # [0] extrae el único componente del array devuelto.
-    resultado_h = integrar(tipo, exponencial, x0, 0.0, 1.0, 0.1)[0]
-    resultado_h2 = integrar(tipo, exponencial, x0, 0.0, 1.0, 0.05)[0]
+    resultado_h = integrar(solver, exponencial, x0, 0.0, 1.0, 0.1)[0]
+    resultado_h2 = integrar(solver, exponencial, x0, 0.0, 1.0, 0.05)[0]
 
     # Error absoluto respecto a la solución exacta.
     error_h = abs(resultado_h - exacto)
